@@ -5,10 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>RSS Embed</title>
 
-  <!-- Roboto (fallback system) -->
+  <!-- Roboto -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-
-  <!-- Swiper (carrousel) -->
+  <!-- Swiper -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">
 
   <style>
@@ -31,16 +30,12 @@
 
     .wrap{ padding:14px 16px 18px; }
 
-    /* Header optionnel (masqué si header=0) */
     .title{ font-size:18px; font-weight:700; margin:0 0 6px; }
     .hint{ font-size:12px; color:var(--muted); margin:0 0 12px; }
 
-    /* Empêche tout style de liste/puce injecté */
     #listBox, #slides { list-style:none; padding-left:0; margin:0; }
 
-    /* -------------------------
-       Meta : source + date
-    ------------------------- */
+    /* Meta */
     .meta-line{
       display:flex;
       gap:10px;
@@ -48,24 +43,22 @@
       flex-wrap:wrap;
       margin: 0 0 8px;
     }
-
     .source{
       font-size:12px;
       font-weight:600;
       color:#334155;
     }
-
-    .meta{
+    .date{
       font-size:12px;
       color:var(--muted);
     }
 
-    /* -------------------------
-       LISTE (vertical)
-    ------------------------- */
+    /* =========================
+       LISTE (app.js => .item/.media/.body)
+    ========================= */
     .list{ display:flex; flex-direction:column; gap:12px; }
 
-    .row{
+    .item{
       display:flex;
       gap:12px;
       border:1px solid var(--line);
@@ -76,32 +69,33 @@
       background:#fff;
       box-shadow: 0 1px 0 rgba(0,0,0,0.02);
     }
-    .row:hover{ border-color:#b9c7d3; }
+    .item:hover{ border-color:#b9c7d3; }
 
-    .thumb{
+    /* si pas d'image => pas de colonne vide */
+    .item.no-media{ gap:0; }
+
+    .media{
       width:180px;
       min-width:180px;
+    }
+    .media img{
+      display:block;
+      width:100%;
       height:104px;
+      object-fit:cover;
       border-radius:12px;
-      border:1px solid var(--line);
-      background-size:cover;
-      background-position:center;
-      background-color:var(--soft);
-      overflow:hidden;
+      background:var(--soft);
     }
 
-    /* Si pas d'image en LISTE -> on supprime la colonne image (alignement propre) */
-    .row.no-thumb{ gap:0; }
-    .row.no-thumb .thumb{ display:none; }
+    .body{ flex:1; min-width:0; }
 
-    .txt{ flex:1; min-width:0; }
-
-    .row-title{
+    .title{
       font-size:16px;
       font-weight:700;
       line-height:1.25;
       margin:0 0 6px;
     }
+
     .excerpt{
       font-size:13px;
       line-height:1.35;
@@ -109,10 +103,10 @@
       color:#2f3b45;
     }
 
-    /* -------------------------
-       CAROUSEL (Swiper)
-    ------------------------- */
-    .swiper{ padding-bottom:30px; }
+    /* =========================
+       CAROUSEL (app.js => .card/.card-media/.card-body)
+    ========================= */
+    .swiper{ padding-bottom:34px; }
     .swiper-slide{ height:auto; }
 
     .card{
@@ -127,16 +121,21 @@
     }
     .card:hover{ border-color:#b9c7d3; }
 
-    /* Image / placeholder : toujours propre */
-    .card-thumb{
-      height:140px;
+    .card-media{
+      height:160px;
       background-size:cover;
       background-position:center;
       background-color:var(--soft);
       border-bottom:1px solid var(--line);
     }
+    .card-media.placeholder{
+      background: linear-gradient(135deg, rgba(221,229,236,.95), rgba(243,246,249,.95));
+    }
 
-    .content{ padding:12px 12px 14px; }
+    /* si le flux n'a AUCUNE image : on enlève complètement l'espace media */
+    #swiperBox.no-media-feed .card-media{ display:none; }
+
+    .card-body{ padding:12px 12px 14px; }
 
     .card-title{
       font-size:15px;
@@ -145,19 +144,26 @@
       margin:0 0 6px;
     }
 
-    /* Flèches Swiper plus discrètes */
+    .card-excerpt{
+      font-size:13px;
+      line-height:1.35;
+      margin:0;
+      color:#2f3b45;
+    }
+
+    /* Flèches : plus grandes + accessibles + clic facile */
     .swiper-button-prev,
     .swiper-button-next{
-      width:28px;
-      height:28px;
+      width:44px;
+      height:44px;
       border-radius:999px;
-      background: rgba(255,255,255,.92);
+      background: rgba(255,255,255,.96);
       border: 1px solid var(--line);
-      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      box-shadow: 0 1px 6px rgba(0,0,0,.10);
     }
     .swiper-button-prev::after,
     .swiper-button-next::after{
-      font-size:14px;
+      font-size:18px;
       font-weight:700;
     }
     .swiper-button-prev{ left: 8px; }
@@ -182,8 +188,8 @@
     <!-- Carousel -->
     <div class="swiper" id="swiperBox" style="display:none;">
       <div class="swiper-wrapper" id="slides"></div>
-      <div class="swiper-button-prev"></div>
-      <div class="swiper-button-next"></div>
+      <div class="swiper-button-prev" aria-label="Précédent"></div>
+      <div class="swiper-button-next" aria-label="Suivant"></div>
       <div class="swiper-pagination"></div>
     </div>
 
