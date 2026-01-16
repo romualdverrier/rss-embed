@@ -51,11 +51,35 @@ https://romualdverrier.github.io/rss-embed/?feed=https://muse.pleiade.education.
 URL 2 — MUSE — mode list
 https://romualdverrier.github.io/rss-embed/?feed=https://muse.pleiade.education.fr/rss/dcaf719f-f512-4e26-94b0-7f2bc15d0e74/&layout=list&limit=20&header=0
 
+<iframe
+  src="https://romualdverrier.github.io/rss-embed/?feed=https://muse.pleiade.education.fr/rss/dcaf719f-f512-4e26-94b0-7f2bc15d0e74/&layout=list&limit=20&header=0"
+  width="100%"
+  height="800"
+  style="border:none"
+  loading="eager">
+</iframe>
+
 URL 3 — Éducation numérique et recherche — mode carousel
 https://romualdverrier.github.io/rss-embed/?feed=https://edunumrech.hypotheses.org/feed&layout=carousel&limit=20&header=0
 
+<iframe
+  src="https://romualdverrier.github.io/rss-embed/?feed=https://edunumrech.hypotheses.org/feed&layout=carousel&limit=20&header=0"
+  width="100%"
+  height="520"
+  style="border:none"
+  loading="eager">
+</iframe>
+
 URL 4 — Éducation numérique et recherche — mode list
 https://romualdverrier.github.io/rss-embed/?feed=https://edunumrech.hypotheses.org/feed&layout=list&limit=20&header=0
+
+<iframe
+  src="https://romualdverrier.github.io/rss-embed/?feed=https://edunumrech.hypotheses.org/feed&layout=list&limit=20&header=0"
+  width="100%"
+  height="800"
+  style="border:none"
+  loading="eager">
+</iframe>
 
 
 
