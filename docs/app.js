@@ -342,7 +342,8 @@
         const dateFr = formatDateFr(pubRaw);
 
         const summaryHtml = getSummaryHtml(node, type);
-        const excerpt = stripHtml(summaryHtml).slice(0, 260);
+        const cleaned = cleanExcerpt(stripHtml(summaryHtml));
+const excerpt = cleaned.slice(0, 260);
 
         let src = getSourceLabel(node);
 
@@ -401,6 +402,26 @@
     return Math.max(min, Math.min(max, n));
   }
 
+function cleanExcerpt(s) {
+  let t = String(s || "").trim();
+
+  // normalise espaces
+  t = t.replace(/\s+/g, " ").trim();
+
+  // supprime les préfixes moches fréquents (spécifique Edunumrech)
+  // Exemples visés :
+  // "Résumé Résumé en français ..." / "Résumé en français ..." / "Résumé en anglais ..."
+  t = t.replace(
+    /^(résumé\s*)+(en\s+(français|anglais)\s*)?/i,
+    ""
+  ).trim();
+
+  // si ça laisse un séparateur au début
+  t = t.replace(/^[:\-–—|]\s*/g, "").trim();
+
+  return t;
+}
+  
   function escapeHtml(s) {
     return String(s || "")
       .replaceAll("&", "&amp;")
