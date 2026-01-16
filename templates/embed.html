@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ page_title }}</title>
+
+  <!-- Roboto (CDN). Marianne: si tu l'héberges plus tard, elle prendra le dessus via CSS -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/static/style.css" />
+
+  {% if layout == "carousel" %}
+  <!-- Swiper (CDN) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">
+  {% endif %}
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div class="title">{{ page_title }}</div>
+    </div>
+
+    {% if not items %}
+      <div class="empty">Aucun élément à afficher.</div>
+    {% else %}
+
+      {% if layout == "carousel" %}
+        <div class="swiper">
+          <div class="swiper-wrapper">
+            {% for it in items %}
+              <div class="swiper-slide">
+                <a class="card" href="{{ it.link }}" target="_blank" rel="noopener noreferrer">
+                  {% if it.image %}
+                    <div class="thumb" style="background-image:url('{{ it.image }}')"></div>
+                  {% endif %}
+                  <div class="content">
+                    <div class="card-title">{{ it.title }}</div>
+                    {% if it.published %}<div class="meta">{{ it.published }}</div>{% endif %}
+                    {% if it.summary %}<div class="excerpt">{{ it.summary }}</div>{% endif %}
+                  </div>
+                </a>
+              </div>
+            {% endfor %}
+          </div>
+
+          <div class="swiper-button-prev"></div>
+          <div class="swiper-button-next"></div>
+          <div class="swiper-pagination"></div>
+        </div>
+
+        <noscript>
+          <div class="notice">JavaScript est désactivé. Passe en mode liste (layout=list).</div>
+        </noscript>
+
+      {% else %}
+        <div class="list">
+          {% for it in items %}
+            <a class="row" href="{{ it.link }}" target="_blank" rel="noopener noreferrer">
+              {% if it.image %}
+                <div class="mini" style="background-image:url('{{ it.image }}')"></div>
+              {% endif %}
+              <div class="txt">
+                <div class="row-title">{{ it.title }}</div>
+                {% if it.published %}<div class="meta">{{ it.published }}</div>{% endif %}
+                {% if it.summary %}<div class="excerpt">{{ it.summary }}</div>{% endif %}
+              </div>
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+    {% endif %}
+  </div>
+
+  {% if layout == "carousel" %}
+  <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+  <script>
+    const swiper = new Swiper('.swiper', {
+      slidesPerView: 1,
+      spaceBetween: 16,
+      loop: false,
+      pagination: { el: '.swiper-pagination', clickable: true },
+      navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' },
+      breakpoints: {
+        720: { slidesPerView: 2 },
+        1060: { slidesPerView: 3 }
+      }
+    });
+  </script>
+  {% endif %}
+</body>
+</html>
