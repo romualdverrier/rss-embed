@@ -32,35 +32,23 @@
     .title{ font-size:18px; font-weight:700; margin:0 0 8px; }
     .hint{ font-size:12px; color:var(--muted); margin:0 0 12px; }
 
-    /* Meta */
+    /* Meta : source (texte simple) + date */
     .meta-line{
       display:flex;
-      gap:8px;
+      gap:10px;
       align-items:center;
       flex-wrap:wrap;
       margin: 0 0 8px;
     }
-    .meta{ font-size:12px; color:var(--muted); }
-
-    /* Source badge : SANS liseré */
-   /* Source en texte simple (pas de badge) */
-.source{
-  font-size:12px;
-  font-weight:600;
-  color:#334155;
-}
-
-/* Date */
-.meta{ font-size:12px; color:var(--muted); }
-
-/* Ligne source + date */
-.meta-line{
-  display:flex;
-  gap:10px;
-  align-items:center;
-  flex-wrap:wrap;
-  margin: 0 0 8px;
-}
+    .source{
+      font-size:12px;
+      font-weight:600;
+      color:#334155;
+    }
+    .meta{
+      font-size:12px;
+      color:var(--muted);
+    }
 
     /* Empêche tout style de liste/puce injecté */
     #listBox, #slides { list-style:none; padding-left:0; margin:0; }
@@ -165,32 +153,24 @@
       color:var(--muted);
       white-space:pre-wrap;
     }
-    /* Source en texte simple (au lieu du badge) */
-.source{
-  font-size:12px;
-  font-weight:600;
-  color:#334155;
-}
 
-/* Swiper : flèches propres (sinon c’est très intrusif selon les thèmes) */
-.swiper-button-prev,
-.swiper-button-next{
-  width:28px;
-  height:28px;
-  border-radius:999px;
-  background: rgba(255,255,255,.92);
-  border: 1px solid var(--line);
-  box-shadow: 0 1px 4px rgba(0,0,0,.08);
-}
-
-.swiper-button-prev::after,
-.swiper-button-next::after{
-  font-size:14px;
-  font-weight:700;
-}
-
-.swiper-button-prev{ left: 8px; }
-.swiper-button-next{ right: 8px; }
+    /* Swiper : flèches discrètes */
+    .swiper-button-prev,
+    .swiper-button-next{
+      width:28px;
+      height:28px;
+      border-radius:999px;
+      background: rgba(255,255,255,.92);
+      border: 1px solid var(--line);
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+    .swiper-button-prev::after,
+    .swiper-button-next::after{
+      font-size:14px;
+      font-weight:700;
+    }
+    .swiper-button-prev{ left: 8px; }
+    .swiper-button-next{ right: 8px; }
   </style>
 </head>
 
@@ -214,6 +194,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
-  <script src="./app.js"></script>
+  <script src="./app.js?v=1"></script>
 </body>
 </html>
