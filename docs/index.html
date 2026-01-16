@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>RSS Embed</title>
 
-  <!-- Roboto (si bloqué, fallback system) -->
+  <!-- Roboto (fallback system) -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 
   <!-- Swiper (carrousel) -->
@@ -16,23 +16,31 @@
       --line:#dde5ec;
       --muted:#6b7c89;
       --text:#1f2933;
+      --bg:#ffffff;
+      --soft:#f3f6f9;
       --font: Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif;
     }
 
-    body{
+    html, body{
       margin:0;
+      padding:0;
+      background: var(--bg);
+      color: var(--text);
       font-family: var(--font);
-      background:#fff;
-      color:var(--text);
     }
 
     .wrap{ padding:14px 16px 18px; }
 
-    /* Header optionnel (souvent caché via header=0) */
-    .title{ font-size:18px; font-weight:700; margin:0 0 8px; }
+    /* Header optionnel (masqué si header=0) */
+    .title{ font-size:18px; font-weight:700; margin:0 0 6px; }
     .hint{ font-size:12px; color:var(--muted); margin:0 0 12px; }
 
-    /* Meta : source (texte simple) + date */
+    /* Empêche tout style de liste/puce injecté */
+    #listBox, #slides { list-style:none; padding-left:0; margin:0; }
+
+    /* -------------------------
+       Meta : source + date
+    ------------------------- */
     .meta-line{
       display:flex;
       gap:10px;
@@ -40,18 +48,17 @@
       flex-wrap:wrap;
       margin: 0 0 8px;
     }
+
     .source{
       font-size:12px;
       font-weight:600;
       color:#334155;
     }
+
     .meta{
       font-size:12px;
       color:var(--muted);
     }
-
-    /* Empêche tout style de liste/puce injecté */
-    #listBox, #slides { list-style:none; padding-left:0; margin:0; }
 
     /* -------------------------
        LISTE (vertical)
@@ -72,25 +79,20 @@
     .row:hover{ border-color:#b9c7d3; }
 
     .thumb{
-      width: 180px;
-      min-width: 180px;
-      height: 104px;
+      width:180px;
+      min-width:180px;
+      height:104px;
       border-radius:12px;
       border:1px solid var(--line);
-      background-size: cover;
-      background-position: center;
-      background-color: #f3f6f9;
-      position: relative;
-      overflow: hidden;
+      background-size:cover;
+      background-position:center;
+      background-color:var(--soft);
+      overflow:hidden;
     }
 
-    /* Placeholder (utilisé surtout en carousel; en list on cache la thumb si pas d'image) */
-    .thumb.placeholder::after{
-      content:"";
-      position:absolute;
-      inset:0;
-      background: linear-gradient(135deg, rgba(221,229,236,.95), rgba(243,246,249,.95));
-    }
+    /* Si pas d'image en LISTE -> on supprime la colonne image (alignement propre) */
+    .row.no-thumb{ gap:0; }
+    .row.no-thumb .thumb{ display:none; }
 
     .txt{ flex:1; min-width:0; }
 
@@ -107,12 +109,8 @@
       color:#2f3b45;
     }
 
-    /* IMPORTANT : si pas d’image en LISTE -> pas de colonne image */
-    .row.no-thumb{ gap:0; }
-    .row.no-thumb .thumb{ display:none; }
-
     /* -------------------------
-       CAROUSEL
+       CAROUSEL (Swiper)
     ------------------------- */
     .swiper{ padding-bottom:30px; }
     .swiper-slide{ height:auto; }
@@ -129,12 +127,13 @@
     }
     .card:hover{ border-color:#b9c7d3; }
 
+    /* Image / placeholder : toujours propre */
     .card-thumb{
       height:140px;
       background-size:cover;
       background-position:center;
+      background-color:var(--soft);
       border-bottom:1px solid var(--line);
-      background-color:#f3f6f9;
     }
 
     .content{ padding:12px 12px 14px; }
@@ -146,15 +145,7 @@
       margin:0 0 6px;
     }
 
-    .error{
-      padding:12px;
-      border:1px solid var(--line);
-      border-radius:10px;
-      color:var(--muted);
-      white-space:pre-wrap;
-    }
-
-    /* Swiper : flèches discrètes */
+    /* Flèches Swiper plus discrètes */
     .swiper-button-prev,
     .swiper-button-next{
       width:28px;
@@ -171,6 +162,15 @@
     }
     .swiper-button-prev{ left: 8px; }
     .swiper-button-next{ right: 8px; }
+
+    /* Erreurs */
+    .error{
+      padding:12px;
+      border:1px solid var(--line);
+      border-radius:10px;
+      color:var(--muted);
+      white-space:pre-wrap;
+    }
   </style>
 </head>
 
@@ -194,6 +194,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
-  <script src="./app.js?v=1"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
