@@ -1,10 +1,10 @@
 /* docs/app.js */
 /* RSS Embed (GitHub Pages) - list + carousel
-   - whitelist feeds
-   - CORS proxies fallback
-   - images: from feed, then optional from article page (OG image / first img)
-   - If NO images in the whole feed: carousel renders without media area (no empty space)
-   - List: one single border per item; no reserved image column when missing
+   - whitelist
+   - source clean (strip <a href=...>)
+   - excerpt clean + ellipsis
+   - image fallback: og:image / twitter:image / first img (src, data-src, srcset)
+   - if no images at all -> compact carousel (no image area)
 */
 
 (() => {
@@ -28,9 +28,6 @@
   const fetchArticleImages = qs.get("fetchArticleImages") !== "0"; // ON by default
   const forcedSource = (qs.get("source") || "").trim();
 
-  // =========================
-  // 3) DOM refs
-  // =========================
   const feedTitleEl = document.getElementById("feedTitle");
   const hintEl = document.getElementById("hint");
   const errEl = document.getElementById("err");
@@ -39,6 +36,9 @@
   const slidesEl = document.getElementById("slides");
   const listBox = document.getElementById("listBox");
 
+  // =========================
+  // 3) UI helpers
+  // =========================
   function showError(msg) {
     errEl.style.display = "block";
     errEl.textContent = msg;
@@ -80,7 +80,7 @@
         if (!r.ok) throw new Error("HTTP " + r.status);
 
         const txt = await r.text();
-        const head = (txt || "").trimStart().slice(0, 350).toLowerCase();
+        const head = (txt || "").trimStart().slice(0, 300).toLowerCase();
         if (!txt) throw new Error("Réponse vide");
 
         if (expect === "xml") {
@@ -91,14 +91,9 @@
             head.includes("<channel") ||
             head.includes("<rss") ||
             head.includes("<feed");
-          const looksHtml =
-            head.startsWith("<!doctype") ||
-            head.startsWith("<html") ||
-            head.includes("<body");
-
+          const looksHtml = head.startsWith("<!doctype") || head.startsWith("<html") || head.includes("<body");
           if (!looksXml || looksHtml) throw new Error("Réponse non RSS/Atom");
         }
-
         return txt;
       } catch (e) {
         lastErr = new Error(`${e.message} via ${target}`);
@@ -153,9 +148,7 @@
 
   function getLink(node, type) {
     if (type === "rss") return text(node, "link") || "#";
-    const alt =
-      node.querySelector('link[rel="alternate"][href]') ||
-      node.querySelector("link[href]");
+    const alt = node.querySelector('link[rel="alternate"][href]') || node.querySelector("link[href]");
     return alt ? (alt.getAttribute("href") || "#") : "#";
   }
 
@@ -168,11 +161,7 @@
     if (!raw) return "";
     const d = new Date(raw);
     if (Number.isNaN(d.getTime())) return "";
-    return new Intl.DateTimeFormat("fr-FR", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    }).format(d);
+    return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric" }).format(d);
   }
 
   function getSummaryHtml(node, type) {
@@ -180,8 +169,34 @@
     return text(node, "content") || text(node, "summary");
   }
 
-  function getSourceLabel(node) {
-    return (forcedSource || text(node, "source") || text(node, "dc\\:creator") || "").trim();
+  // IMPORTANT : certains flux (MUSE) mettent du HTML dans dc:creator/source => on nettoie
+  function cleanSourceLabel(raw, linkForHostname = "") {
+    let s = String(raw || "").trim();
+    if (!s) return "";
+
+    // si ça contient du HTML, on garde seulement le texte
+    if (s.includes("<") && s.includes(">")) s = stripHtml(s);
+
+    // si c'est une URL, on réduit au hostname
+    if (/^https?:\/\//i.test(s)) {
+      try {
+        s = new URL(s).hostname.replace(/^www\./, "");
+      } catch {}
+    }
+
+    // parfois on récupère un truc du genre "<a href='...'>Label</a>" -> maintenant ok.
+    s = s.replace(/\s+/g, " ").trim();
+    return s;
+  }
+
+  function getSourceLabel(node, linkForHostname) {
+    const raw =
+      forcedSource ||
+      text(node, "source") ||
+      text(node, "dc\\:creator") ||
+      text(node, "author") ||
+      "";
+    return cleanSourceLabel(raw, linkForHostname);
   }
 
   function pickImageFromFeed(node, type) {
@@ -204,34 +219,54 @@
   }
 
   // =========================
-  // 6) Image fallback from article page
+  // 6) Image fallback from article page (Hypothèses)
   // =========================
   const articleImgCache = new Map(); // link -> imgUrl
+
+  function pickBestImgUrlFromElement(imgEl, baseLink) {
+    if (!imgEl) return "";
+    const candidates = [];
+
+    const attrs = ["src", "data-src", "data-lazy-src", "data-original", "data-orig-file"];
+    for (const a of attrs) {
+      const v = imgEl.getAttribute(a);
+      if (v) candidates.push(v);
+    }
+
+    // srcset: on prend le dernier (souvent le plus grand)
+    const srcset = imgEl.getAttribute("srcset") || imgEl.getAttribute("data-srcset");
+    if (srcset) {
+      const parts = srcset.split(",").map((p) => p.trim().split(" ")[0]).filter(Boolean);
+      if (parts.length) candidates.push(parts[parts.length - 1]);
+    }
+
+    for (const c of candidates) {
+      const u = absUrl(c, baseLink);
+      if (u) return u;
+    }
+    return "";
+  }
 
   async function pickImageFromArticlePage(link) {
     if (!images || !fetchArticleImages) return "";
     if (!link || link === "#") return "";
-
     if (articleImgCache.has(link)) return articleImgCache.get(link);
 
     try {
       const html = await fetchTextWithFallback(link, { expect: "html" });
       const doc = new DOMParser().parseFromString(html, "text/html");
 
-      // OG / Twitter
+      // 1) OG/Twitter
       const og =
         doc.querySelector('meta[property="og:image"][content]') ||
         doc.querySelector('meta[name="twitter:image"][content]') ||
         doc.querySelector('meta[name="twitter:image:src"][content]');
       if (og && og.getAttribute("content")) {
         const u = absUrl(og.getAttribute("content"), link);
-        if (u) {
-          articleImgCache.set(link, u);
-          return u;
-        }
+        if (u) return (articleImgCache.set(link, u), u);
       }
 
-      // first <img> in main content
+      // 2) WordPress/Hypothèses content
       const content =
         doc.querySelector(".entry-content") ||
         doc.querySelector("article") ||
@@ -239,14 +274,10 @@
         doc.body;
 
       if (content) {
-        const img = content.querySelector("img[src]");
-        if (img && img.getAttribute("src")) {
-          const u = absUrl(img.getAttribute("src"), link);
-          if (u) {
-            articleImgCache.set(link, u);
-            return u;
-          }
-        }
+        // d'abord figure img, souvent l'image “mise en avant”
+        let img = content.querySelector("figure img, .wp-post-image, img");
+        const u = pickBestImgUrlFromElement(img, link);
+        if (u) return (articleImgCache.set(link, u), u);
       }
     } catch {
       // silent
@@ -257,67 +288,74 @@
   }
 
   // =========================
-  // 7) Text cleaning
+  // 7) Excerpt clean + ellipsis
   // =========================
   function cleanExcerpt(s) {
     let t = String(s || "").trim();
     t = t.replace(/\s+/g, " ").trim();
 
-    // supprime les préfixes "Résumé Résumé en français ..." etc.
-    t = t.replace(/^(résumé\s*)+(en\s+(français|anglais)\s*)?/i, "").trim();
+    // supprime préfixes moches (edunumrech)
+    // "Résumé Résumé en français ..." / "Résumé en français ..." / "Résumé en anglais ..."
+    t = t.replace(/^(résumé\s*)+(en\s+(français|anglais|espagnol)\s*)?/i, "").trim();
+
+    // supprime "En anglais," "En français," au début (souvent redondant)
+    t = t.replace(/^(en\s+(anglais|français|espagnol)\s*[,:\-–—]?\s*)/i, "").trim();
+
+    // supprime séparateurs au début
     t = t.replace(/^[:\-–—|]\s*/g, "").trim();
+
     return t;
   }
 
+  function truncateWithEllipsis(s, max) {
+    const t = String(s || "");
+    if (t.length <= max) return t;
+    return t.slice(0, max).replace(/\s+\S*$/, "").trim() + "…";
+  }
+
   // =========================
-  // 8) Render helpers
+  // 8) Render
   // =========================
-  function makeMetaLine(src, dateFr) {
+  function metaLine(src, dateFr) {
     if (!src && !dateFr) return "";
     return `
       <div class="meta-line">
         ${src ? `<span class="source">${escapeHtml(src)}</span>` : ``}
-        ${dateFr ? `<span class="date">${escapeHtml(dateFr)}</span>` : ``}
+        ${dateFr ? `<span class="meta">${escapeHtml(dateFr)}</span>` : ``}
       </div>
     `;
   }
 
-  function makeListItem({ title, link, src, dateFr, excerpt, img }) {
-    // 1 seul cadre (.item). Si pas d'image: pas de colonne.
+  function listItem({ title, link, src, dateFr, excerpt, img }) {
+    const imgHtml = img
+      ? `<div class="media"><img src="${escapeAttr(img)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>`
+      : ``;
+
     return `
       <a class="item ${img ? "" : "no-media"}" href="${escapeAttr(link)}" target="_blank" rel="noopener noreferrer">
-        ${img ? `<div class="media"><img src="${escapeAttr(img)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>` : ``}
+        ${imgHtml}
         <div class="body">
           <div class="title">${escapeHtml(title)}</div>
-          ${makeMetaLine(src, dateFr)}
+          ${metaLine(src, dateFr)}
           ${excerpt ? `<div class="excerpt">${escapeHtml(excerpt)}</div>` : ``}
         </div>
       </a>
     `;
   }
 
-  function makeCarouselCard({ title, link, src, dateFr, excerpt, img }, { showMediaArea, showPlaceholder }) {
-    // Si le flux n'a AUCUNE image: showMediaArea=false => pas de zone média du tout.
-    // Si le flux a des images mais l'item n'en a pas:
-    // - showPlaceholder=true => placeholder discret
-    // - sinon => pas de zone média pour cet item (hauteur variable)
-    let media = "";
-    if (showMediaArea) {
-      if (img) {
-        media = `<div class="card-media" style="background-image:url('${escapeAttr(img)}')"></div>`;
-      } else if (showPlaceholder) {
-        media = `<div class="card-media placeholder"></div>`;
-      } else {
-        media = ``;
-      }
-    }
+  function carouselCard({ title, link, src, dateFr, excerpt, img }, compactNoMedia) {
+    const media = compactNoMedia
+      ? ``
+      : (img
+          ? `<div class="card-media" style="background-image:url('${escapeAttr(img)}')"></div>`
+          : `<div class="card-media placeholder"></div>`);
 
     return `
-      <a class="card" href="${escapeAttr(link)}" target="_blank" rel="noopener noreferrer">
+      <a class="card ${compactNoMedia ? "compact" : ""}" href="${escapeAttr(link)}" target="_blank" rel="noopener noreferrer">
         ${media}
         <div class="card-body">
           <div class="card-title">${escapeHtml(title)}</div>
-          ${makeMetaLine(src, dateFr)}
+          ${metaLine(src, dateFr)}
           ${excerpt ? `<div class="card-excerpt">${escapeHtml(excerpt)}</div>` : ``}
         </div>
       </a>
@@ -344,19 +382,18 @@
         const title = text(node, "title") || "Sans titre";
         const link = getLink(node, type) || "#";
 
-        const pubRaw = getPublishedRaw(node, type);
-        const dateFr = formatDateFr(pubRaw);
+        const dateFr = formatDateFr(getPublishedRaw(node, type));
 
         const summaryHtml = getSummaryHtml(node, type);
-        const excerpt = cleanExcerpt(stripHtml(summaryHtml)).slice(0, 260);
+        const excerpt = truncateWithEllipsis(cleanExcerpt(stripHtml(summaryHtml)), 260);
 
-        const src = getSourceLabel(node);
+        const src = getSourceLabel(node, link);
 
-        // image: feed first
+        // image from feed
         let img = pickImageFromFeed(node, type);
         img = img ? absUrl(img, link) : "";
 
-        // fallback article page (Hypothèses)
+        // fallback from article page
         if (!img && images && fetchArticleImages) {
           img = await pickImageFromArticlePage(link);
         }
@@ -364,27 +401,14 @@
         entries.push({ title, link, src, dateFr, excerpt, img });
       }
 
-      const hasAnyImage = images && entries.some((e) => !!e.img);
-
       if (layout === "carousel") {
         swiperBox.style.display = "block";
 
-        // si aucune image dans le flux => pas de zone image du tout
-        if (!hasAnyImage) swiperBox.classList.add("no-media-feed");
-        else swiperBox.classList.remove("no-media-feed");
+        const hasAnyImage = entries.some((e) => !!e.img);
+        const compactNoMedia = !hasAnyImage; // si aucune image dans tout le flux, on enlève la zone image
 
-        const showMediaArea = hasAnyImage;      // sinon -> aucune zone media
-        const showPlaceholder = false;          // mets true si tu veux placeholder pour items sans image
-
-        const cardsHtml = entries
-          .map((e) => makeCarouselCard(e, { showMediaArea, showPlaceholder }))
-          .join("");
-
-        // wrapper slides
-        slidesEl.innerHTML = cardsHtml
-          .split("</a>")
-          .filter(Boolean)
-          .map((chunk) => `<div class="swiper-slide">${chunk}</a></div>`)
+        slidesEl.innerHTML = entries
+          .map((e) => `<div class="swiper-slide">${carouselCard(e, compactNoMedia)}</div>`)
           .join("");
 
         // eslint-disable-next-line no-undef
@@ -394,14 +418,11 @@
           loop: false,
           pagination: { el: ".swiper-pagination", clickable: true },
           navigation: { nextEl: ".swiper-button-next", prevEl: ".swiper-button-prev" },
-          breakpoints: {
-            760: { slidesPerView: 2 },
-            1120: { slidesPerView: 3 },
-          },
+          breakpoints: { 760: { slidesPerView: 2 }, 1120: { slidesPerView: 3 } },
         });
       } else {
         listBox.style.display = "block";
-        listBox.innerHTML = entries.map(makeListItem).join("");
+        listBox.innerHTML = entries.map(listItem).join("");
       }
     } catch (e) {
       showError("Erreur : " + (e && e.message ? e.message : String(e)));
