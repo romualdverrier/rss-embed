@@ -11,10 +11,44 @@
   // =========================
   // 1) Whitelist
   // =========================
-  const ALLOWED_FEEDS = [
-    "https://edunumrech.hypotheses.org/feed",
-    "https://muse.pleiade.education.fr/rss/dcaf719f-f512-4e26-94b0-7f2bc15d0e74/",
-  ];
+const ALLOWED_FEEDS = [
+  "https://edunumrech.hypotheses.org/feed",
+  "https://edunumrech.hypotheses.org/feed/",
+  "https://muse.pleiade.education.fr/rss/dcaf719f-f512-4e26-94b0-7f2bc15d0e74/",
+];
+
+// Normalise : enlève le slash final (sauf "https://")
+function normalizeUrl(u){
+  try{
+    const url = new URL(u);
+    // garde l'origine + pathname sans slash final
+    url.pathname = url.pathname.replace(/\/+$/, "");
+    // mais si pathname vide => "/"
+    if (url.pathname === "") url.pathname = "/";
+    url.hash = "";
+    // on garde la query car ton feed n'en a pas, mais ce n'est pas grave
+    return url.toString().replace(/\/$/, ""); // normalise encore un peu
+  } catch {
+    return String(u || "").replace(/\/+$/, "");
+  }
+}
+
+const feedNorm = normalizeUrl(feed);
+const allowedNorm = new Set(ALLOWED_FEEDS.map(normalizeUrl));
+
+if (!feed) {
+  showError("Paramètre manquant : ?feed=https://...");
+  return;
+}
+
+// Sécurité : refuse tout flux non whitelisté (avec tolérance / final)
+if (!allowedNorm.has(feedNorm)) {
+  showError(
+    "Flux non autorisé.\n\nFlux autorisés :\n- " +
+    Array.from(allowedNorm).join("\n- ")
+  );
+  return;
+}
 
   // =========================
   // 2) Params
