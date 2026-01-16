@@ -113,6 +113,23 @@
     return n ? (n.textContent || "").trim() : "";
   }
 
+  function cleanLabel(s) {
+    if (!s) return "";
+    return String(s)
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^[\s•·◦○●⚪︎▫️▪️–—\-|:;]+/u, "")
+      .trim();
+  }
+
+  function normalizeUrl(u) {
+    if (!u) return "";
+    let s = String(u).trim();
+    if (s.startsWith("//")) s = "https:" + s;
+    if (s.startsWith("http://")) s = "https://" + s.slice("http://".length);
+    return s;
+  }
+
   function firstImgFromHtml(html) {
     const m = /<img[^>]+src="([^"]+)"/i.exec(html || "");
     return m ? m[1] : "";
@@ -136,7 +153,7 @@
     const rssTitle = doc.querySelector("channel > title");
     if (rssTitle && rssTitle.textContent) return rssTitle.textContent.trim();
     const atomTitle = doc.querySelector("feed > title");
-    if (atomTitle && atomTitle.textContent) return atomTitle.textContent.trim();
+    if (atomTitle && rssTitle.textContent) return atomTitle.textContent.trim();
     return "";
   }
 
@@ -164,37 +181,44 @@
   }
 
   function getSourceLabel(node) {
-    return (forcedSource || text(node, "source") || text(node, "dc\\:creator") || "").trim();
+    const raw =
+      forcedSource ||
+      text(node, "source") ||
+      text(node, "dc\\:creator") ||
+      text(node, "author > name") ||
+      "";
+    return cleanLabel(raw);
   }
 
   function pickImage(node, type) {
     if (!images) return "";
 
     const enc = node.querySelector("enclosure[url]");
-    if (enc && enc.getAttribute("url")) return enc.getAttribute("url");
+    if (enc && enc.getAttribute("url")) return normalizeUrl(enc.getAttribute("url"));
 
     const mc = node.querySelector("media\\:content[url], content[url]");
-    if (mc && mc.getAttribute("url")) return mc.getAttribute("url");
+    if (mc && mc.getAttribute("url")) return normalizeUrl(mc.getAttribute("url"));
 
     const mt = node.querySelector("media\\:thumbnail[url], thumbnail[url]");
-    if (mt && mt.getAttribute("url")) return mt.getAttribute("url");
+    if (mt && mt.getAttribute("url")) return normalizeUrl(mt.getAttribute("url"));
 
     const aenc = node.querySelector('link[rel="enclosure"][href]');
-    if (aenc && aenc.getAttribute("href")) return aenc.getAttribute("href");
+    if (aenc && aenc.getAttribute("href")) return normalizeUrl(aenc.getAttribute("href"));
 
     const contentEncoded = text(node, "content\\:encoded");
     const imgFromContent = firstImgFromHtml(contentEncoded);
-    if (imgFromContent) return imgFromContent;
+    if (imgFromContent) return normalizeUrl(imgFromContent);
 
     const raw = getSummary(node, type);
-    return firstImgFromHtml(raw);
+    return normalizeUrl(firstImgFromHtml(raw));
   }
 
   function buildMetaLine(src, dateFr) {
+    src = cleanLabel(src);
     if (!src && !dateFr) return "";
     return `
       <div class="meta-line">
-        ${src ? `<span class="badge">${src}</span>` : ``}
+        ${src ? `<span class="source">${src}</span>` : ``}
         ${dateFr ? `<span class="meta">${dateFr}</span>` : ``}
       </div>
     `;
