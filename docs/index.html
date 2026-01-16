@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>RSS Embed</title>
 
-  <!-- Roboto -->
+  <!-- Roboto (fallback system) -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
   <!-- Swiper -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">
@@ -23,89 +23,78 @@
     html, body{
       margin:0;
       padding:0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font);
+      background:var(--bg);
+      color:var(--text);
+      font-family:var(--font);
     }
 
     .wrap{ padding:14px 16px 18px; }
 
+    /* Header optionnel */
     .title{ font-size:18px; font-weight:700; margin:0 0 6px; }
     .hint{ font-size:12px; color:var(--muted); margin:0 0 12px; }
 
-    #listBox, #slides { list-style:none; padding-left:0; margin:0; }
-
-    /* Meta */
+    /* -------------------------
+       Meta : source + date
+    ------------------------- */
     .meta-line{
       display:flex;
       gap:10px;
       align-items:center;
       flex-wrap:wrap;
-      margin: 0 0 8px;
+      margin: 6px 0 8px;
     }
-    .source{
-      font-size:12px;
-      font-weight:600;
-      color:#334155;
-    }
-    .date{
-      font-size:12px;
-      color:var(--muted);
-    }
+    .source{ font-size:12px; font-weight:600; color:#334155; }
+    .meta{ font-size:12px; color:var(--muted); }
 
-    /* =========================
-       LISTE (app.js => .item/.media/.body)
-    ========================= */
-    .list{ display:flex; flex-direction:column; gap:12px; }
+    /* -------------------------
+       LIST (simple, propre)
+       -> un SEUL cadre / pas de sous-cadres
+    ------------------------- */
+    .list{ display:flex; flex-direction:column; gap:0; }
 
     .item{
       display:flex;
-      gap:12px;
-      border:1px solid var(--line);
-      border-radius:14px;
-      padding:12px;
+      gap:14px;
+      padding:14px 0;
       text-decoration:none;
       color:inherit;
-      background:#fff;
-      box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+      border-bottom:1px solid var(--line);
     }
-    .item:hover{ border-color:#b9c7d3; }
+    .item:hover{ background: rgba(0,0,0,0.01); }
 
-    /* si pas d'image => pas de colonne vide */
     .item.no-media{ gap:0; }
 
     .media{
-      width:180px;
-      min-width:180px;
+      width:140px;
+      flex: 0 0 140px;
     }
     .media img{
-      display:block;
-      width:100%;
-      height:104px;
+      width:140px;
+      height:92px;
       object-fit:cover;
       border-radius:12px;
+      display:block;
       background:var(--soft);
     }
 
     .body{ flex:1; min-width:0; }
-
     .title{
       font-size:16px;
       font-weight:700;
       line-height:1.25;
-      margin:0 0 6px;
+      margin:0;
     }
-
     .excerpt{
       font-size:13px;
-      line-height:1.35;
-      margin:0;
+      line-height:1.4;
       color:#2f3b45;
+      margin:0;
     }
 
-    /* =========================
-       CAROUSEL (app.js => .card/.card-media/.card-body)
-    ========================= */
+    /* -------------------------
+       CAROUSEL (Swiper)
+    ------------------------- */
     .swiper{ padding-bottom:34px; }
     .swiper-slide{ height:auto; }
 
@@ -114,15 +103,14 @@
       text-decoration:none;
       color:inherit;
       border:1px solid var(--line);
-      border-radius:14px;
+      border-radius:16px;
       overflow:hidden;
       background:#fff;
-      box-shadow: 0 1px 0 rgba(0,0,0,0.02);
     }
     .card:hover{ border-color:#b9c7d3; }
 
     .card-media{
-      height:160px;
+      height:150px;
       background-size:cover;
       background-position:center;
       background-color:var(--soft);
@@ -132,8 +120,8 @@
       background: linear-gradient(135deg, rgba(221,229,236,.95), rgba(243,246,249,.95));
     }
 
-    /* si le flux n'a AUCUNE image : on enlève complètement l'espace media */
-    #swiperBox.no-media-feed .card-media{ display:none; }
+    /* si tout le flux n’a AUCUNE image => cards compactes, pas de zone media */
+    .card.compact .card-body{ padding-top:14px; }
 
     .card-body{ padding:12px 12px 14px; }
 
@@ -141,17 +129,16 @@
       font-size:15px;
       font-weight:700;
       line-height:1.25;
-      margin:0 0 6px;
+      margin:0;
     }
-
     .card-excerpt{
       font-size:13px;
-      line-height:1.35;
-      margin:0;
+      line-height:1.4;
       color:#2f3b45;
+      margin:0;
     }
 
-    /* Flèches : plus grandes + accessibles + clic facile */
+    /* Flèches : grosses zones cliquables (accessibilité) */
     .swiper-button-prev,
     .swiper-button-next{
       width:44px;
@@ -159,18 +146,19 @@
       border-radius:999px;
       background: rgba(255,255,255,.96);
       border: 1px solid var(--line);
-      box-shadow: 0 1px 6px rgba(0,0,0,.10);
+      box-shadow: 0 2px 10px rgba(0,0,0,.10);
     }
     .swiper-button-prev::after,
     .swiper-button-next::after{
       font-size:18px;
-      font-weight:700;
+      font-weight:800;
     }
-    .swiper-button-prev{ left: 8px; }
-    .swiper-button-next{ right: 8px; }
+    .swiper-button-prev{ left: 10px; }
+    .swiper-button-next{ right: 10px; }
 
     /* Erreurs */
     .error{
+      margin-top:12px;
       padding:12px;
       border:1px solid var(--line);
       border-radius:10px;
@@ -185,7 +173,6 @@
     <h1 class="title" id="feedTitle">Flux RSS</h1>
     <p class="hint" id="hint"></p>
 
-    <!-- Carousel -->
     <div class="swiper" id="swiperBox" style="display:none;">
       <div class="swiper-wrapper" id="slides"></div>
       <div class="swiper-button-prev" aria-label="Précédent"></div>
@@ -193,7 +180,6 @@
       <div class="swiper-pagination"></div>
     </div>
 
-    <!-- List -->
     <div class="list" id="listBox" style="display:none;"></div>
 
     <div id="err" class="error" style="display:none;"></div>
