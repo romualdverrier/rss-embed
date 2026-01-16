@@ -108,12 +108,19 @@
     const feed = qs.get("feed");
     const limit = Math.max(1, Math.min(50, parseInt(qs.get("limit") || "20", 10)));
     const layout = (qs.get("layout") || "carousel").toLowerCase(); // carousel | list
+    const header = qs.get("header") !== "0"; // true par défaut
     const forcedSource = qs.get("source"); // optionnel : force un libellé de source
 
     const hintEl = document.getElementById("hint");
-    hintEl.textContent = feed
-      ? `source: ${feed} | limit: ${limit} | layout: ${layout}${forcedSource ? " | forced source: " + forcedSource : ""}`
-      : "Ajoute ?feed=<url> dans l'URL.";
+
+if (!header) {
+  document.getElementById("feedTitle").style.display = "none";
+  hintEl.style.display = "none";
+} else {
+  hintEl.textContent = feed
+    ? `source: ${feed} | limit: ${limit} | layout: ${layout}${forcedSource ? " | forced source: " + forcedSource : ""}`
+    : "Ajoute ?feed=<url> dans l'URL.";
+}
 
     function showError(msg){
       const e = document.getElementById("err");
