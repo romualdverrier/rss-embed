@@ -1,5 +1,11 @@
 /* docs/app.js */
-/* RSS Embed (GitHub Pages) - list + carousel */
+/* RSS Embed (GitHub Pages) - list + carousel
+   - whitelist feeds
+   - CORS proxies fallback
+   - images: from feed, then optional from article page (OG image / first img)
+   - If NO images in the whole feed: carousel renders without media area (no empty space)
+   - List: one single border per item; no reserved image column when missing
+*/
 
 (() => {
   // =========================
@@ -22,7 +28,9 @@
   const fetchArticleImages = qs.get("fetchArticleImages") !== "0"; // ON by default
   const forcedSource = (qs.get("source") || "").trim();
 
-  // DOM
+  // =========================
+  // 3) DOM refs
+  // =========================
   const feedTitleEl = document.getElementById("feedTitle");
   const hintEl = document.getElementById("hint");
   const errEl = document.getElementById("err");
@@ -31,9 +39,6 @@
   const slidesEl = document.getElementById("slides");
   const listBox = document.getElementById("listBox");
 
-  // =========================
-  // 3) UI helpers
-  // =========================
   function showError(msg) {
     errEl.style.display = "block";
     errEl.textContent = msg;
@@ -57,7 +62,7 @@
   }
 
   // =========================
-  // 4) Proxies
+  // 4) Proxies (RAW)
   // =========================
   const PROXIES = [
     (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
@@ -75,10 +80,10 @@
         if (!r.ok) throw new Error("HTTP " + r.status);
 
         const txt = await r.text();
+        const head = (txt || "").trimStart().slice(0, 350).toLowerCase();
         if (!txt) throw new Error("Réponse vide");
 
         if (expect === "xml") {
-          const head = txt.trimStart().slice(0, 300).toLowerCase();
           const looksXml =
             head.startsWith("<?xml") ||
             head.startsWith("<rss") ||
@@ -86,7 +91,11 @@
             head.includes("<channel") ||
             head.includes("<rss") ||
             head.includes("<feed");
-          const looksHtml = head.startsWith("<!doctype") || head.startsWith("<html") || head.includes("<body");
+          const looksHtml =
+            head.startsWith("<!doctype") ||
+            head.startsWith("<html") ||
+            head.includes("<body");
+
           if (!looksXml || looksHtml) throw new Error("Réponse non RSS/Atom");
         }
 
@@ -144,7 +153,9 @@
 
   function getLink(node, type) {
     if (type === "rss") return text(node, "link") || "#";
-    const alt = node.querySelector('link[rel="alternate"][href]') || node.querySelector("link[href]");
+    const alt =
+      node.querySelector('link[rel="alternate"][href]') ||
+      node.querySelector("link[href]");
     return alt ? (alt.getAttribute("href") || "#") : "#";
   }
 
@@ -157,7 +168,11 @@
     if (!raw) return "";
     const d = new Date(raw);
     if (Number.isNaN(d.getTime())) return "";
-    return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric" }).format(d);
+    return new Intl.DateTimeFormat("fr-FR", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }).format(d);
   }
 
   function getSummaryHtml(node, type) {
@@ -169,28 +184,27 @@
     return (forcedSource || text(node, "source") || text(node, "dc\\:creator") || "").trim();
   }
 
-  function pickImageFromFeed(node, type, linkForAbs) {
+  function pickImageFromFeed(node, type) {
     if (!images) return "";
 
     const enc = node.querySelector("enclosure[url]");
-    if (enc && enc.getAttribute("url")) return absUrl(enc.getAttribute("url"), linkForAbs);
+    if (enc && enc.getAttribute("url")) return enc.getAttribute("url");
 
     const mc = node.querySelector("media\\:content[url], content[url]");
-    if (mc && mc.getAttribute("url")) return absUrl(mc.getAttribute("url"), linkForAbs);
+    if (mc && mc.getAttribute("url")) return mc.getAttribute("url");
 
     const mt = node.querySelector("media\\:thumbnail[url], thumbnail[url]");
-    if (mt && mt.getAttribute("url")) return absUrl(mt.getAttribute("url"), linkForAbs);
+    if (mt && mt.getAttribute("url")) return mt.getAttribute("url");
 
     const aenc = node.querySelector('link[rel="enclosure"][href]');
-    if (aenc && aenc.getAttribute("href")) return absUrl(aenc.getAttribute("href"), linkForAbs);
+    if (aenc && aenc.getAttribute("href")) return aenc.getAttribute("href");
 
     const html = getSummaryHtml(node, type);
-    const img = firstImgFromHtml(html);
-    return img ? absUrl(img, linkForAbs) : "";
+    return firstImgFromHtml(html);
   }
 
   // =========================
-  // 6) Article-page image fallback (Hypothèses)
+  // 6) Image fallback from article page
   // =========================
   const articleImgCache = new Map(); // link -> imgUrl
 
@@ -204,6 +218,7 @@
       const html = await fetchTextWithFallback(link, { expect: "html" });
       const doc = new DOMParser().parseFromString(html, "text/html");
 
+      // OG / Twitter
       const og =
         doc.querySelector('meta[property="og:image"][content]') ||
         doc.querySelector('meta[name="twitter:image"][content]') ||
@@ -216,6 +231,7 @@
         }
       }
 
+      // first <img> in main content
       const content =
         doc.querySelector(".entry-content") ||
         doc.querySelector("article") ||
@@ -233,7 +249,7 @@
         }
       }
     } catch {
-      // silence
+      // silent
     }
 
     articleImgCache.set(link, "");
@@ -244,17 +260,17 @@
   // 7) Text cleaning
   // =========================
   function cleanExcerpt(s) {
-    let t = String(s || "").replace(/\s+/g, " ").trim();
+    let t = String(s || "").trim();
+    t = t.replace(/\s+/g, " ").trim();
 
-    // supprime "Résumé Résumé en français ..." / "Résumé en français ..." etc.
+    // supprime les préfixes "Résumé Résumé en français ..." etc.
     t = t.replace(/^(résumé\s*)+(en\s+(français|anglais)\s*)?/i, "").trim();
     t = t.replace(/^[:\-–—|]\s*/g, "").trim();
-
     return t;
   }
 
   // =========================
-  // 8) Render
+  // 8) Render helpers
   // =========================
   function makeMetaLine(src, dateFr) {
     if (!src && !dateFr) return "";
@@ -267,9 +283,9 @@
   }
 
   function makeListItem({ title, link, src, dateFr, excerpt, img }) {
-    // Un seul contour = .item
+    // 1 seul cadre (.item). Si pas d'image: pas de colonne.
     return `
-      <a class="item" href="${escapeAttr(link)}" target="_blank" rel="noopener noreferrer">
+      <a class="item ${img ? "" : "no-media"}" href="${escapeAttr(link)}" target="_blank" rel="noopener noreferrer">
         ${img ? `<div class="media"><img src="${escapeAttr(img)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>` : ``}
         <div class="body">
           <div class="title">${escapeHtml(title)}</div>
@@ -280,14 +296,25 @@
     `;
   }
 
-  function makeCarouselCard({ title, link, src, dateFr, excerpt, img }) {
-    const thumb = img
-      ? `<div class="card-media" style="background-image:url('${escapeAttr(img)}')"></div>`
-      : `<div class="card-media placeholder"></div>`;
+  function makeCarouselCard({ title, link, src, dateFr, excerpt, img }, { showMediaArea, showPlaceholder }) {
+    // Si le flux n'a AUCUNE image: showMediaArea=false => pas de zone média du tout.
+    // Si le flux a des images mais l'item n'en a pas:
+    // - showPlaceholder=true => placeholder discret
+    // - sinon => pas de zone média pour cet item (hauteur variable)
+    let media = "";
+    if (showMediaArea) {
+      if (img) {
+        media = `<div class="card-media" style="background-image:url('${escapeAttr(img)}')"></div>`;
+      } else if (showPlaceholder) {
+        media = `<div class="card-media placeholder"></div>`;
+      } else {
+        media = ``;
+      }
+    }
 
     return `
       <a class="card" href="${escapeAttr(link)}" target="_blank" rel="noopener noreferrer">
-        ${thumb}
+        ${media}
         <div class="card-body">
           <div class="card-title">${escapeHtml(title)}</div>
           ${makeMetaLine(src, dateFr)}
@@ -303,12 +330,12 @@
   (async () => {
     try {
       const xmlText = await fetchTextWithFallback(feed, { expect: "xml" });
-      const xmlDoc = new DOMParser().parseFromString(xmlText, "text/xml");
+      const doc = new DOMParser().parseFromString(xmlText, "text/xml");
 
-      const channelTitle = getTitle(xmlDoc);
+      const channelTitle = getTitle(doc);
       if (channelTitle) feedTitleEl.textContent = channelTitle;
 
-      const { type, items } = getItems(xmlDoc);
+      const { type, items } = getItems(doc);
       const sliced = items.slice(0, limit);
       if (!sliced.length) throw new Error("Aucun item/entry détecté dans le flux.");
 
@@ -316,17 +343,20 @@
       for (const node of sliced) {
         const title = text(node, "title") || "Sans titre";
         const link = getLink(node, type) || "#";
-        const dateFr = formatDateFr(getPublishedRaw(node, type));
+
+        const pubRaw = getPublishedRaw(node, type);
+        const dateFr = formatDateFr(pubRaw);
 
         const summaryHtml = getSummaryHtml(node, type);
         const excerpt = cleanExcerpt(stripHtml(summaryHtml)).slice(0, 260);
 
         const src = getSourceLabel(node);
 
-        // image : d'abord flux
-        let img = pickImageFromFeed(node, type, link);
+        // image: feed first
+        let img = pickImageFromFeed(node, type);
+        img = img ? absUrl(img, link) : "";
 
-        // fallback : page article (Hypothèses surtout)
+        // fallback article page (Hypothèses)
         if (!img && images && fetchArticleImages) {
           img = await pickImageFromArticlePage(link);
         }
@@ -334,16 +364,28 @@
         entries.push({ title, link, src, dateFr, excerpt, img });
       }
 
+      const hasAnyImage = images && entries.some((e) => !!e.img);
+
       if (layout === "carousel") {
         swiperBox.style.display = "block";
-        slidesEl.innerHTML = "";
 
-        for (const e of entries) {
-          const slide = document.createElement("div");
-          slide.className = "swiper-slide";
-          slide.innerHTML = makeCarouselCard(e);
-          slidesEl.appendChild(slide);
-        }
+        // si aucune image dans le flux => pas de zone image du tout
+        if (!hasAnyImage) swiperBox.classList.add("no-media-feed");
+        else swiperBox.classList.remove("no-media-feed");
+
+        const showMediaArea = hasAnyImage;      // sinon -> aucune zone media
+        const showPlaceholder = false;          // mets true si tu veux placeholder pour items sans image
+
+        const cardsHtml = entries
+          .map((e) => makeCarouselCard(e, { showMediaArea, showPlaceholder }))
+          .join("");
+
+        // wrapper slides
+        slidesEl.innerHTML = cardsHtml
+          .split("</a>")
+          .filter(Boolean)
+          .map((chunk) => `<div class="swiper-slide">${chunk}</a></div>`)
+          .join("");
 
         // eslint-disable-next-line no-undef
         new Swiper(".swiper", {
@@ -352,7 +394,10 @@
           loop: false,
           pagination: { el: ".swiper-pagination", clickable: true },
           navigation: { nextEl: ".swiper-button-next", prevEl: ".swiper-button-prev" },
-          breakpoints: { 760: { slidesPerView: 2 }, 1120: { slidesPerView: 3 } },
+          breakpoints: {
+            760: { slidesPerView: 2 },
+            1120: { slidesPerView: 3 },
+          },
         });
       } else {
         listBox.style.display = "block";
