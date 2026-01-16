@@ -1,5 +1,5 @@
 /* docs/app.js */
-/* RSS Embed (GitHub Pages) - list + carousel, with optional "fetch image from article page" fallback */
+/* RSS Embed (GitHub Pages) - list + carousel */
 
 (() => {
   // =========================
@@ -7,7 +7,7 @@
   // =========================
   const ALLOWED_FEEDS = [
     "https://edunumrech.hypotheses.org/feed",
-    "https://muse.pleiade.education.fr/rss/dcaf719f-f512-4e26-94b0-7f2bc15d0e74/"
+    "https://muse.pleiade.education.fr/rss/dcaf719f-f512-4e26-94b0-7f2bc15d0e74/",
   ];
 
   // =========================
@@ -17,11 +17,12 @@
   const feed = qs.get("feed");
   const limit = clampInt(qs.get("limit"), 1, 50, 20);
   const layout = (qs.get("layout") || "list").toLowerCase(); // list | carousel
-  const header = qs.get("header") !== "0"; // visible by default
-  const images = qs.get("images") !== "0"; // images on by default
+  const header = qs.get("header") !== "0";
+  const images = qs.get("images") !== "0";
   const fetchArticleImages = qs.get("fetchArticleImages") !== "0"; // ON by default
-  const forcedSource = (qs.get("source") || "").trim(); // optional
+  const forcedSource = (qs.get("source") || "").trim();
 
+  // DOM
   const feedTitleEl = document.getElementById("feedTitle");
   const hintEl = document.getElementById("hint");
   const errEl = document.getElementById("err");
@@ -44,9 +45,7 @@
   }
 
   if (!ALLOWED_FEEDS.includes(feed)) {
-    showError(
-      "Flux non autorisé.\n\nFlux autorisés :\n- " + ALLOWED_FEEDS.join("\n- ")
-    );
+    showError("Flux non autorisé.\n\nFlux autorisés :\n- " + ALLOWED_FEEDS.join("\n- "));
     return;
   }
 
@@ -58,9 +57,8 @@
   }
 
   // =========================
-  // 4) Proxies (RAW)
+  // 4) Proxies
   // =========================
-  // NOTE: Les proxys gratuits peuvent être instables. On en met plusieurs.
   const PROXIES = [
     (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
     (u) => "https://corsproxy.io/?" + encodeURIComponent(u),
@@ -77,11 +75,10 @@
         if (!r.ok) throw new Error("HTTP " + r.status);
 
         const txt = await r.text();
-        const head = (txt || "").trimStart().slice(0, 300).toLowerCase();
-
         if (!txt) throw new Error("Réponse vide");
 
         if (expect === "xml") {
+          const head = txt.trimStart().slice(0, 300).toLowerCase();
           const looksXml =
             head.startsWith("<?xml") ||
             head.startsWith("<rss") ||
@@ -89,15 +86,10 @@
             head.includes("<channel") ||
             head.includes("<rss") ||
             head.includes("<feed");
-          const looksHtml =
-            head.startsWith("<!doctype") ||
-            head.startsWith("<html") ||
-            head.includes("<body");
-
+          const looksHtml = head.startsWith("<!doctype") || head.startsWith("<html") || head.includes("<body");
           if (!looksXml || looksHtml) throw new Error("Réponse non RSS/Atom");
         }
 
-        // expect html: pas de contrainte, on accepte HTML
         return txt;
       } catch (e) {
         lastErr = new Error(`${e.message} via ${target}`);
@@ -152,9 +144,7 @@
 
   function getLink(node, type) {
     if (type === "rss") return text(node, "link") || "#";
-    const alt =
-      node.querySelector('link[rel="alternate"][href]') ||
-      node.querySelector("link[href]");
+    const alt = node.querySelector('link[rel="alternate"][href]') || node.querySelector("link[href]");
     return alt ? (alt.getAttribute("href") || "#") : "#";
   }
 
@@ -167,11 +157,7 @@
     if (!raw) return "";
     const d = new Date(raw);
     if (Number.isNaN(d.getTime())) return "";
-    return new Intl.DateTimeFormat("fr-FR", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    }).format(d);
+    return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric" }).format(d);
   }
 
   function getSummaryHtml(node, type) {
@@ -180,41 +166,31 @@
   }
 
   function getSourceLabel(node) {
-    // RSS standard: pas toujours “source” utilisable.
-    // Muse / ta veille : si tu as un tag <source> ou <dc:creator> on tente.
-    return (
-      forcedSource ||
-      text(node, "source") ||
-      text(node, "dc\\:creator") ||
-      ""
-    ).trim();
+    return (forcedSource || text(node, "source") || text(node, "dc\\:creator") || "").trim();
   }
 
-  function pickImageFromFeed(node, type) {
+  function pickImageFromFeed(node, type, linkForAbs) {
     if (!images) return "";
 
-    // RSS enclosure
     const enc = node.querySelector("enclosure[url]");
-    if (enc && enc.getAttribute("url")) return enc.getAttribute("url");
+    if (enc && enc.getAttribute("url")) return absUrl(enc.getAttribute("url"), linkForAbs);
 
-    // media:content / media:thumbnail
     const mc = node.querySelector("media\\:content[url], content[url]");
-    if (mc && mc.getAttribute("url")) return mc.getAttribute("url");
+    if (mc && mc.getAttribute("url")) return absUrl(mc.getAttribute("url"), linkForAbs);
 
     const mt = node.querySelector("media\\:thumbnail[url], thumbnail[url]");
-    if (mt && mt.getAttribute("url")) return mt.getAttribute("url");
+    if (mt && mt.getAttribute("url")) return absUrl(mt.getAttribute("url"), linkForAbs);
 
-    // Atom enclosure
     const aenc = node.querySelector('link[rel="enclosure"][href]');
-    if (aenc && aenc.getAttribute("href")) return aenc.getAttribute("href");
+    if (aenc && aenc.getAttribute("href")) return absUrl(aenc.getAttribute("href"), linkForAbs);
 
-    // Try content/description embedded <img>
     const html = getSummaryHtml(node, type);
-    return firstImgFromHtml(html);
+    const img = firstImgFromHtml(html);
+    return img ? absUrl(img, linkForAbs) : "";
   }
 
   // =========================
-  // 6) Image fallback from article page (Hypothèses)
+  // 6) Article-page image fallback (Hypothèses)
   // =========================
   const articleImgCache = new Map(); // link -> imgUrl
 
@@ -228,7 +204,6 @@
       const html = await fetchTextWithFallback(link, { expect: "html" });
       const doc = new DOMParser().parseFromString(html, "text/html");
 
-      // 1) OG image / Twitter image
       const og =
         doc.querySelector('meta[property="og:image"][content]') ||
         doc.querySelector('meta[name="twitter:image"][content]') ||
@@ -241,14 +216,12 @@
         }
       }
 
-      // 2) WordPress/Hypothèses typical content area
       const content =
         doc.querySelector(".entry-content") ||
         doc.querySelector("article") ||
         doc.querySelector("main") ||
         doc.body;
 
-      // 3) First <img> in content
       if (content) {
         const img = content.querySelector("img[src]");
         if (img && img.getAttribute("src")) {
@@ -259,8 +232,8 @@
           }
         }
       }
-    } catch (e) {
-      // silent fail: we'll just have no image
+    } catch {
+      // silence
     }
 
     articleImgCache.set(link, "");
@@ -268,11 +241,23 @@
   }
 
   // =========================
-  // 7) Render (single border per item)
+  // 7) Text cleaning
+  // =========================
+  function cleanExcerpt(s) {
+    let t = String(s || "").replace(/\s+/g, " ").trim();
+
+    // supprime "Résumé Résumé en français ..." / "Résumé en français ..." etc.
+    t = t.replace(/^(résumé\s*)+(en\s+(français|anglais)\s*)?/i, "").trim();
+    t = t.replace(/^[:\-–—|]\s*/g, "").trim();
+
+    return t;
+  }
+
+  // =========================
+  // 8) Render
   // =========================
   function makeMetaLine(src, dateFr) {
     if (!src && !dateFr) return "";
-    // Source = texte simple, pas de badge, pas de bordure
     return `
       <div class="meta-line">
         ${src ? `<span class="source">${escapeHtml(src)}</span>` : ``}
@@ -282,15 +267,10 @@
   }
 
   function makeListItem({ title, link, src, dateFr, excerpt, img }) {
-    // Un SEUL cadre : .item
-    // Image optionnelle : aucune bordure/mini-cadre interne.
-    const imgHtml = img
-      ? `<div class="media"><img src="${escapeAttr(img)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>`
-      : ``;
-
+    // Un seul contour = .item
     return `
       <a class="item" href="${escapeAttr(link)}" target="_blank" rel="noopener noreferrer">
-        ${imgHtml}
+        ${img ? `<div class="media"><img src="${escapeAttr(img)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>` : ``}
         <div class="body">
           <div class="title">${escapeHtml(title)}</div>
           ${makeMetaLine(src, dateFr)}
@@ -318,40 +298,35 @@
   }
 
   // =========================
-  // 8) Main
+  // 9) Main
   // =========================
   (async () => {
     try {
       const xmlText = await fetchTextWithFallback(feed, { expect: "xml" });
-      const doc = new DOMParser().parseFromString(xmlText, "text/xml");
+      const xmlDoc = new DOMParser().parseFromString(xmlText, "text/xml");
 
-      const channelTitle = getTitle(doc);
+      const channelTitle = getTitle(xmlDoc);
       if (channelTitle) feedTitleEl.textContent = channelTitle;
 
-      const { type, items } = getItems(doc);
+      const { type, items } = getItems(xmlDoc);
       const sliced = items.slice(0, limit);
       if (!sliced.length) throw new Error("Aucun item/entry détecté dans le flux.");
 
-      // Build entries
       const entries = [];
       for (const node of sliced) {
         const title = text(node, "title") || "Sans titre";
         const link = getLink(node, type) || "#";
-
-        const pubRaw = getPublishedRaw(node, type);
-        const dateFr = formatDateFr(pubRaw);
+        const dateFr = formatDateFr(getPublishedRaw(node, type));
 
         const summaryHtml = getSummaryHtml(node, type);
-        const cleaned = cleanExcerpt(stripHtml(summaryHtml));
-const excerpt = cleaned.slice(0, 260);
+        const excerpt = cleanExcerpt(stripHtml(summaryHtml)).slice(0, 260);
 
-        let src = getSourceLabel(node);
+        const src = getSourceLabel(node);
 
-        // Image from feed first
-        let img = pickImageFromFeed(node, type);
-        img = img ? absUrl(img, link) : "";
+        // image : d'abord flux
+        let img = pickImageFromFeed(node, type, link);
 
-        // If none, try from article page (Hypothèses mainly)
+        // fallback : page article (Hypothèses surtout)
         if (!img && images && fetchArticleImages) {
           img = await pickImageFromArticlePage(link);
         }
@@ -360,17 +335,16 @@ const excerpt = cleaned.slice(0, 260);
       }
 
       if (layout === "carousel") {
-        // Render carousel
         swiperBox.style.display = "block";
+        slidesEl.innerHTML = "";
 
-        const cardsHtml = entries.map(makeCarouselCard).join("");
-        slidesEl.innerHTML = cardsHtml
-          .split("</a>")
-          .filter(Boolean)
-          .map((chunk) => `<div class="swiper-slide">${chunk}</a></div>`)
-          .join("");
+        for (const e of entries) {
+          const slide = document.createElement("div");
+          slide.className = "swiper-slide";
+          slide.innerHTML = makeCarouselCard(e);
+          slidesEl.appendChild(slide);
+        }
 
-        // Swiper init (big arrows in CSS)
         // eslint-disable-next-line no-undef
         new Swiper(".swiper", {
           slidesPerView: 1,
@@ -378,13 +352,9 @@ const excerpt = cleaned.slice(0, 260);
           loop: false,
           pagination: { el: ".swiper-pagination", clickable: true },
           navigation: { nextEl: ".swiper-button-next", prevEl: ".swiper-button-prev" },
-          breakpoints: {
-            760: { slidesPerView: 2 },
-            1120: { slidesPerView: 3 },
-          },
+          breakpoints: { 760: { slidesPerView: 2 }, 1120: { slidesPerView: 3 } },
         });
       } else {
-        // Render list
         listBox.style.display = "block";
         listBox.innerHTML = entries.map(makeListItem).join("");
       }
@@ -402,26 +372,6 @@ const excerpt = cleaned.slice(0, 260);
     return Math.max(min, Math.min(max, n));
   }
 
-function cleanExcerpt(s) {
-  let t = String(s || "").trim();
-
-  // normalise espaces
-  t = t.replace(/\s+/g, " ").trim();
-
-  // supprime les préfixes moches fréquents (spécifique Edunumrech)
-  // Exemples visés :
-  // "Résumé Résumé en français ..." / "Résumé en français ..." / "Résumé en anglais ..."
-  t = t.replace(
-    /^(résumé\s*)+(en\s+(français|anglais)\s*)?/i,
-    ""
-  ).trim();
-
-  // si ça laisse un séparateur au début
-  t = t.replace(/^[:\-–—|]\s*/g, "").trim();
-
-  return t;
-}
-  
   function escapeHtml(s) {
     return String(s || "")
       .replaceAll("&", "&amp;")
