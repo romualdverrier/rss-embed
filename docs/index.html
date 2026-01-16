@@ -8,37 +8,86 @@
   <!-- Roboto -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 
-  <!-- Swiper -->
+  <!-- Swiper (pour le carrousel) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">
 
   <style>
     :root { --line:#dde5ec; --muted:#6b7c89; --text:#1f2933; }
     body{ margin:0; font-family:Roboto,system-ui,Arial,sans-serif; background:#fff; color:var(--text); }
     .wrap{ padding:14px 16px 18px; }
-    .title{ font-size:18px; font-weight:700; margin:0 0 12px; }
+    .title{ font-size:18px; font-weight:700; margin:0 0 8px; }
     .hint{ font-size:12px; color:var(--muted); margin:0 0 12px; }
+
+    .badge{
+      display:inline-block;
+      font-size:12px;
+      font-weight:500;
+      color: var(--muted);
+      border:1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 8px;
+      white-space: nowrap;
+    }
+
+    .meta{
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    .meta-line{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+      margin: 0 0 8px;
+    }
 
     .card{
       display:block; text-decoration:none; color:inherit;
       border:1px solid var(--line); border-radius:14px; overflow:hidden; background:#fff;
     }
     .card:hover{ border-color:#b9c7d3; }
+
     .thumb{ height:140px; background-size:cover; background-position:center; border-bottom:1px solid var(--line); }
     .content{ padding:12px 12px 14px; }
     .card-title{ font-size:15px; font-weight:700; line-height:1.25; margin:0 0 6px; }
-    .meta{ font-size:12px; color:var(--muted); margin:0 0 8px; }
     .excerpt{ font-size:13px; line-height:1.35; margin:0; }
 
     .swiper{ padding-bottom:28px; }
     .swiper-slide{ height:auto; }
-    .error{ padding:12px; border:1px solid var(--line); border-radius:10px; color:var(--muted); }
+
+    /* Liste */
+    .list{ display:flex; flex-direction:column; gap:10px; }
+    .row{
+      display:flex; gap:10px;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:10px;
+      text-decoration:none;
+      color:inherit;
+    }
+    .row:hover{ border-color:#b9c7d3; }
+    .mini{
+      width:96px; min-width:96px;
+      height:72px;
+      border-radius:10px;
+      background-size:cover;
+      background-position:center;
+      border:1px solid var(--line);
+    }
+    .txt{ flex:1; }
+    .row-title{ font-size:15px; font-weight:700; line-height:1.25; margin:0 0 6px; }
+
+    .error{ padding:12px; border:1px solid var(--line); border-radius:10px; color:var(--muted); white-space:pre-wrap; }
   </style>
 </head>
+
 <body>
   <div class="wrap">
     <h1 class="title" id="feedTitle">Flux RSS</h1>
     <p class="hint" id="hint"></p>
 
+    <!-- Carrousel -->
     <div class="swiper" id="swiperBox" style="display:none;">
       <div class="swiper-wrapper" id="slides"></div>
       <div class="swiper-button-prev"></div>
@@ -46,53 +95,64 @@
       <div class="swiper-pagination"></div>
     </div>
 
+    <!-- Liste -->
+    <div class="list" id="listBox" style="display:none;"></div>
+
     <div id="err" class="error" style="display:none;"></div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
   <script>
     const qs = new URLSearchParams(location.search);
+
     const feed = qs.get("feed");
     const limit = Math.max(1, Math.min(50, parseInt(qs.get("limit") || "20", 10)));
+    const layout = (qs.get("layout") || "carousel").toLowerCase(); // carousel | list
+    const forcedSource = qs.get("source"); // optionnel : force un libellé de source
 
     const hintEl = document.getElementById("hint");
-    hintEl.textContent = feed ? `source: ${feed} | limit: ${limit}` : "Ajoute ?feed=<url> dans l'URL.";
+    hintEl.textContent = feed
+      ? `source: ${feed} | limit: ${limit} | layout: ${layout}${forcedSource ? " | forced source: " + forcedSource : ""}`
+      : "Ajoute ?feed=<url> dans l'URL.";
 
-    if (!feed) {
+    function showError(msg){
       const e = document.getElementById("err");
       e.style.display = "block";
-      e.textContent = "Paramètre manquant : ?feed=https://...";
+      e.textContent = msg;
+    }
+
+    if (!feed) {
+      showError("Paramètre manquant : ?feed=https://...");
       throw new Error("missing feed");
     }
 
-    // Multi-proxy (évite CORS + contourne certains refus)
+    // Proxys "RAW" (renvoient normalement le contenu d'origine)
     const PROXIES = [
-      // 1) AllOrigins
       (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
-
-      // 2) CorsProxy.io
       (u) => "https://corsproxy.io/?" + encodeURIComponent(u),
-
-      // 3) Jina Reader (récupère le contenu via leur infra)
-      (u) => {
-        const clean = u.replace(/^https?:\/\//, "");
-        return "https://r.jina.ai/https://" + clean;
-      },
+      (u) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(u),
+      (u) => "https://thingproxy.freeboard.io/fetch/" + u,
+      (u) => "https://cors-proxy.htmldriven.com/?url=" + encodeURIComponent(u),
     ];
 
     async function fetchXmlWithFallback(url) {
       let lastErr = null;
+
       for (const mk of PROXIES) {
         const target = mk(url);
         try {
           const r = await fetch(target, { cache: "no-store" });
           if (!r.ok) throw new Error("HTTP " + r.status);
+
           const txt = await r.text();
-          // sanity check
-          if (!txt || (!txt.includes("<rss") && !txt.includes("<feed") && !txt.includes("<channel"))) {
-            throw new Error("Réponse non RSS/Atom");
-          }
+          const head = (txt || "").trimStart().slice(0, 220);
+
+          const looksLikeXml = head.startsWith("<?xml") || head.startsWith("<rss") || head.startsWith("<feed") || head.includes("<rss") || head.includes("<feed") || head.includes("<channel");
+          const looksLikeHtml = head.startsWith("<!doctype") || head.startsWith("<html") || head.includes("<body");
+
+          if (!txt || !looksLikeXml || looksLikeHtml) throw new Error("Réponse non RSS/Atom");
           return txt;
+
         } catch (e) {
           lastErr = new Error(`${e.message} via ${target}`);
         }
@@ -100,6 +160,7 @@
       throw lastErr || new Error("Impossible de récupérer le flux via les proxys.");
     }
 
+    // Helpers parsing
     function text(el, sel) {
       const n = el.querySelector(sel);
       return n ? (n.textContent || "").trim() : "";
@@ -110,150 +171,163 @@
       return m ? m[1] : "";
     }
 
-    function pickImageFromRssItem(item) {
-      // RSS: enclosure
-      const enc = item.querySelector("enclosure[url]");
-      if (enc && enc.getAttribute("url")) return enc.getAttribute("url");
-
-      // RSS: media:content / media:thumbnail
-      const mc = item.querySelector("media\\:content[url], content[url]");
-      if (mc && mc.getAttribute("url")) return mc.getAttribute("url");
-
-      const mt = item.querySelector("media\\:thumbnail[url], thumbnail[url]");
-      if (mt && mt.getAttribute("url")) return mt.getAttribute("url");
-
-      // RSS: description img
-      const desc = text(item, "description");
-      return firstImgFromHtml(desc);
-    }
-
-    function pickImageFromAtomEntry(entry) {
-      // Atom: media:thumbnail / media:content
-      const mt = entry.querySelector("media\\:thumbnail[url], thumbnail[url]");
-      if (mt && mt.getAttribute("url")) return mt.getAttribute("url");
-
-      const mc = entry.querySelector("media\\:content[url], content[url]");
-      if (mc && mc.getAttribute("url")) return mc.getAttribute("url");
-
-      // Atom: link rel="enclosure" type="image/*"
-      const links = Array.from(entry.querySelectorAll("link"));
-      for (const l of links) {
-        const rel = (l.getAttribute("rel") || "").toLowerCase();
-        const type = (l.getAttribute("type") || "").toLowerCase();
-        const href = l.getAttribute("href");
-        if (href && (rel === "enclosure" || type.startsWith("image/"))) return href;
-      }
-
-      // Atom: content/summary HTML
-      const content = entry.querySelector("content");
-      if (content) return firstImgFromHtml(content.textContent || "");
-      const summary = entry.querySelector("summary");
-      if (summary) return firstImgFromHtml(summary.textContent || "");
-
-      return "";
-    }
-
     function stripHtml(html) {
       const tmp = document.createElement("div");
       tmp.innerHTML = html || "";
       return (tmp.textContent || "").replace(/\s+/g, " ").trim();
     }
 
-    function setTitleFromDoc(doc) {
-      // RSS
-      const rssTitle = doc.querySelector("channel > title");
-      if (rssTitle && rssTitle.textContent) {
-        document.getElementById("feedTitle").textContent = rssTitle.textContent.trim();
-        return;
-      }
-      // Atom
-      const atomTitle = doc.querySelector("feed > title");
-      if (atomTitle && atomTitle.textContent) {
-        document.getElementById("feedTitle").textContent = atomTitle.textContent.trim();
-      }
+    function pickImageFromNode(node) {
+      const enc = node.querySelector("enclosure[url]");
+      if (enc && enc.getAttribute("url")) return enc.getAttribute("url");
+
+      const mc = node.querySelector("media\\:content[url], content[url]");
+      if (mc && mc.getAttribute("url")) return mc.getAttribute("url");
+
+      const mt = node.querySelector("media\\:thumbnail[url], thumbnail[url]");
+      if (mt && mt.getAttribute("url")) return mt.getAttribute("url");
+
+      const aenc = node.querySelector('link[rel="enclosure"][href]');
+      if (aenc && aenc.getAttribute("href")) return aenc.getAttribute("href");
+
+      const content = text(node, "content") || text(node, "summary") || text(node, "description");
+      return firstImgFromHtml(content);
     }
 
-    function buildSlide({ title, link, pub, excerpt, img }) {
-      const slide = document.createElement("div");
-      slide.className = "swiper-slide";
-      slide.innerHTML = `
-        <a class="card" href="${link}" target="_blank" rel="noopener noreferrer">
-          ${img ? `<div class="thumb" style="background-image:url('${img}')"></div>` : ``}
-          <div class="content">
-            <div class="card-title">${title}</div>
-            ${pub ? `<div class="meta">${pub}</div>` : ``}
-            ${excerpt ? `<p class="excerpt">${excerpt}${excerpt.length>=220 ? "…" : ""}</p>` : ``}
-          </div>
-        </a>`;
-      return slide;
+    function getItems(doc) {
+      const rssItems = Array.from(doc.querySelectorAll("item"));
+      if (rssItems.length) return { type: "rss", items: rssItems };
+
+      const atomEntries = Array.from(doc.querySelectorAll("entry"));
+      if (atomEntries.length) return { type: "atom", items: atomEntries };
+
+      return { type: "unknown", items: [] };
+    }
+
+    function getTitle(doc) {
+      const rssTitle = doc.querySelector("channel > title");
+      if (rssTitle && rssTitle.textContent) return rssTitle.textContent.trim();
+
+      const atomTitle = doc.querySelector("feed > title");
+      if (atomTitle && atomTitle.textContent) return atomTitle.textContent.trim();
+
+      return "";
+    }
+
+    function getLink(node, type) {
+      if (type === "rss") return text(node, "link") || "#";
+      const alt = node.querySelector('link[rel="alternate"][href]') || node.querySelector('link[href]');
+      return alt ? (alt.getAttribute("href") || "#") : "#";
+    }
+
+    function getPublished(node, type) {
+      if (type === "rss") return text(node, "pubDate") || text(node, "dc\\:date");
+      return text(node, "updated") || text(node, "published");
+    }
+
+    function getSummary(node, type) {
+      if (type === "rss") return text(node, "description") || text(node, "content\\:encoded");
+      return text(node, "summary") || text(node, "content");
+    }
+
+    function getSourceLabel(node) {
+      // Priorité : source forcée > <source> > dc:creator > vide
+      return (forcedSource || text(node, "source") || text(node, "dc\\:creator") || "").trim();
+    }
+
+    // Render
+    function renderCarousel(cards) {
+      const slides = document.getElementById("slides");
+      cards.forEach(cardHtml => {
+        const slide = document.createElement("div");
+        slide.className = "swiper-slide";
+        slide.innerHTML = cardHtml;
+        slides.appendChild(slide);
+      });
+
+      document.getElementById("swiperBox").style.display = "block";
+
+      new Swiper(".swiper", {
+        slidesPerView: 1,
+        spaceBetween: 16,
+        loop: false,
+        pagination: { el: ".swiper-pagination", clickable: true },
+        navigation: { nextEl: ".swiper-button-next", prevEl: ".swiper-button-prev" },
+        breakpoints: { 720: { slidesPerView: 2 }, 1060: { slidesPerView: 3 } }
+      });
+    }
+
+    function renderList(rows) {
+      const box = document.getElementById("listBox");
+      rows.forEach(row => box.appendChild(row));
+      box.style.display = "flex";
     }
 
     fetchXmlWithFallback(feed)
       .then(xmlText => new DOMParser().parseFromString(xmlText, "text/xml"))
       .then(doc => {
-        setTitleFromDoc(doc);
+        const t = getTitle(doc);
+        if (t) document.getElementById("feedTitle").textContent = t;
 
-        const slides = document.getElementById("slides");
+        const { type, items } = getItems(doc);
+        const sliced = items.slice(0, limit);
+        if (!sliced.length) throw new Error("Aucun item/entry détecté dans le flux.");
 
-        // RSS items
-        const rssItems = Array.from(doc.querySelectorAll("item"));
-        // Atom entries
-        const atomEntries = Array.from(doc.querySelectorAll("entry"));
+        const cardHtmls = [];
+        const rowNodes = [];
 
-        let count = 0;
+        sliced.forEach(node => {
+          const title = text(node, "title") || "Sans titre";
+          const link = getLink(node, type);
+          const pub = getPublished(node, type);
+          const descHtml = getSummary(node, type);
+          const excerpt = stripHtml(descHtml).slice(0, 220);
+          const img = pickImageFromNode(node);
+          const src = getSourceLabel(node);
 
-        if (rssItems.length) {
-          rssItems.slice(0, limit).forEach(it => {
-            const title = text(it, "title") || "Sans titre";
-            const link = text(it, "link") || "#";
-            const pub = text(it, "pubDate") || text(it, "dc\\:date");
-            const descHtml = text(it, "description");
-            const excerpt = stripHtml(descHtml).slice(0, 220);
-            const img = pickImageFromRssItem(it);
+          const metaLine = (pub || src) ? `
+            <div class="meta-line">
+              ${src ? `<span class="badge">${src}</span>` : ``}
+              ${pub ? `<span class="meta">${pub}</span>` : ``}
+            </div>
+          ` : ``;
 
-            slides.appendChild(buildSlide({ title, link, pub, excerpt, img }));
-            count += 1;
-          });
-        } else if (atomEntries.length) {
-          atomEntries.slice(0, limit).forEach(en => {
-            const title = text(en, "title") || "Sans titre";
-            // Atom link: href
-            const linkEl = en.querySelector("link[href]") || en.querySelector("link");
-            const link = linkEl ? (linkEl.getAttribute("href") || linkEl.textContent || "#") : "#";
-            const pub = text(en, "updated") || text(en, "published");
-            const content = en.querySelector("content");
-            const summary = en.querySelector("summary");
-            const raw = (content && content.textContent) ? content.textContent : (summary ? summary.textContent : "");
-            const excerpt = stripHtml(raw).slice(0, 220);
-            const img = pickImageFromAtomEntry(en);
+          const card = `
+            <a class="card" href="${link}" target="_blank" rel="noopener noreferrer">
+              ${img ? `<div class="thumb" style="background-image:url('${img}')"></div>` : ``}
+              <div class="content">
+                <div class="card-title">${title}</div>
+                ${metaLine}
+                ${excerpt ? `<p class="excerpt">${excerpt}${excerpt.length>=220 ? "…" : ""}</p>` : ``}
+              </div>
+            </a>
+          `;
+          cardHtmls.push(card);
 
-            slides.appendChild(buildSlide({ title, link, pub, excerpt, img }));
-            count += 1;
-          });
-        } else {
-          throw new Error("Aucun item RSS (<item>) ni entry Atom (<entry>) détecté dans le flux.");
-        }
-
-        if (!count) throw new Error("Aucun élément à afficher.");
-
-        document.getElementById("swiperBox").style.display = "block";
-
-        new Swiper(".swiper", {
-          slidesPerView: 1,
-          spaceBetween: 16,
-          loop: false,
-          pagination: { el: ".swiper-pagination", clickable: true },
-          navigation: { nextEl: ".swiper-button-next", prevEl: ".swiper-button-prev" },
-          breakpoints: {
-            720: { slidesPerView: 2 },
-            1060: { slidesPerView: 3 }
-          }
+          const row = document.createElement("a");
+          row.className = "row";
+          row.href = link;
+          row.target = "_blank";
+          row.rel = "noopener noreferrer";
+          row.innerHTML = `
+            ${img ? `<div class="mini" style="background-image:url('${img}')"></div>` : `<div class="mini"></div>`}
+            <div class="txt">
+              <div class="row-title">${title}</div>
+              ${metaLine}
+              ${excerpt ? `<div class="excerpt">${excerpt}${excerpt.length>=220 ? "…" : ""}</div>` : ``}
+            </div>
+          `;
+          rowNodes.push(row);
         });
+
+        if (layout === "list") {
+          renderList(rowNodes);
+        } else {
+          renderCarousel(cardHtmls);
+        }
       })
       .catch(err => {
-        const e = document.getElementById("err");
-        e.style.display = "block";
-        e.textContent = "Erreur : " + (err && err.message ? err.message : err);
+        showError("Erreur : " + (err && err.message ? err.message : err));
       });
   </script>
 </body>
