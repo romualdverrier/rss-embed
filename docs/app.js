@@ -84,10 +84,9 @@
   // =========================
   // 4) Proxies (RAW)
   // =========================
-  const PROXIES = [
-    (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
-    (u) => "https://corsproxy.io/?" + encodeURIComponent(u),
-  ];
+const PROXIES = [
+  (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
+];
 
   async function fetchTextWithFallback(url, { expect = "xml", timeoutMs = 8000 } = {}) {
     let lastErr = null;
