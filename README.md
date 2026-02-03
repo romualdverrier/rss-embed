@@ -48,7 +48,7 @@ https://romualdverrier.github.io/rss-embed/?feed=https://muse.pleiade.education.
   loading="eager">
 </iframe>
 
-URL 2 — MUSE — mode list
+URL 2 — MUSE — mode liste
 https://romualdverrier.github.io/rss-embed/?feed=https://muse.pleiade.education.fr/rss/dcaf719f-f512-4e26-94b0-7f2bc15d0e74/&layout=list&limit=20&header=0
 
 <iframe
@@ -70,7 +70,7 @@ https://romualdverrier.github.io/rss-embed/?feed=https://edunumrech.hypotheses.o
   loading="eager">
 </iframe>
 
-URL 4 — Éducation numérique et recherche — mode list
+URL 4 — Éducation numérique et recherche — mode liste
 https://romualdverrier.github.io/rss-embed/?feed=https://edunumrech.hypotheses.org/feed&layout=list&limit=20&header=0
 
 <iframe
